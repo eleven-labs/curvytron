@@ -12,6 +12,13 @@ BonusSelfSmall.prototype = Object.create(BonusSelf.prototype);
 BonusSelfSmall.prototype.constructor = BonusSelfSmall;
 
 /**
+ * Duration
+ *
+ * @type {Number}
+ */
+BonusSelfSmall.prototype.duration = 7500;
+
+/**
  * Get effects
  *
  * @param {Avatar} avatar
@@ -20,5 +27,5 @@ BonusSelfSmall.prototype.constructor = BonusSelfSmall;
  */
 BonusSelfSmall.prototype.getEffects = function(avatar)
 {
-    return [['radius', BaseAvatar.prototype.radius/2]];
+    return [['radius', -1]];
 };

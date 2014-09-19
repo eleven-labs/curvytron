@@ -7,10 +7,11 @@ function BaseAvatar(player)
 {
     EventEmitter.call(this);
 
+    this.id              = player.id;
     this.name            = player.name;
     this.color           = player.color;
     this.player          = player;
-    this.head            = [this.radius, this.radius];
+    this.head            = new Array(2);
     this.trail           = new Trail(this);
     this.bonusStack      = new BonusStack(this);
     this.angle           = 0;
@@ -19,11 +20,9 @@ function BaseAvatar(player)
     this.alive           = true;
     this.printing        = false;
     this.score           = 0;
-    this.printingTimeout = null;
+    this.roundScore      = 0;
     this.ready           = false;
-    this.ownColor        = this.color;
-
-    this.togglePrinting = this.togglePrinting.bind(this);
+    this.present         = true;
 
     this.updateVelocities();
 }
@@ -33,12 +32,12 @@ BaseAvatar.prototype.constructor = BaseAvatar;
 
 BaseAvatar.prototype.velocity            = 16;
 BaseAvatar.prototype.angularVelocityBase = 2.8/1000;
-BaseAvatar.prototype.noPrintingTime      = 300;
-BaseAvatar.prototype.printingTime        = 3000;
 BaseAvatar.prototype.radius              = 0.6;
 BaseAvatar.prototype.trailLatency        = 3;
 BaseAvatar.prototype.inverse             = false;
 BaseAvatar.prototype.invincible          = false;
+BaseAvatar.prototype.borderless          = false;
+BaseAvatar.prototype.directionInLoop     = true;
 
 /**
  * Equal
@@ -49,7 +48,7 @@ BaseAvatar.prototype.invincible          = false;
  */
 BaseAvatar.prototype.equal = function(avatar)
 {
-    return this.name === avatar.name;
+    return this.id === avatar.id;
 };
 
 /**
@@ -57,6 +56,7 @@ BaseAvatar.prototype.equal = function(avatar)
  *
  * @param {Array} point
  */
+
 BaseAvatar.prototype.setPosition = function(point)
 {
     this.head[0] = point[0];
@@ -85,6 +85,11 @@ BaseAvatar.prototype.addPoint = function(point)
  */
 BaseAvatar.prototype.setAngularVelocity = function(factor)
 {
+    if (typeof(factor) === 'undefined') {
+        if (this.angularVelocity === 0) { return; }
+        factor = (this.angularVelocity > 0 ? 1 : -1) * (this.inverse ? -1 : 1);
+    }
+
     this.angularVelocity = factor * this.angularVelocityBase * (this.inverse ? -1 : 1);
 };
 
@@ -114,7 +119,12 @@ BaseAvatar.prototype.update = function(step) {};
 BaseAvatar.prototype.updateAngle = function(step)
 {
     if (this.angularVelocity) {
-        this.setAngle(this.angle + this.angularVelocity * step);
+        if (this.directionInLoop) {
+            this.setAngle(this.angle + this.angularVelocity * step);
+        } else {
+            this.setAngle(this.angle + this.angularVelocity);
+            this.setAngularVelocity(0);
+        }
     }
 };
 
@@ -138,10 +148,8 @@ BaseAvatar.prototype.updatePosition = function(step)
  */
 BaseAvatar.prototype.setVelocity = function(velocity)
 {
-    if (velocity > 0) {
-        this.velocity = velocity;
-        this.updateVelocities();
-    }
+    this.velocity = Math.max(velocity, BaseAvatar.prototype.velocity/2);
+    this.updateVelocities();
 };
 
 /**
@@ -153,6 +161,21 @@ BaseAvatar.prototype.updateVelocities = function()
         Math.cos(this.angle) * this.velocity/1000,
         Math.sin(this.angle) * this.velocity/1000
     ];
+
+    this.updateAngularVelocity();
+};
+
+/**
+ * Update angular velocity
+ */
+BaseAvatar.prototype.updateAngularVelocity = function()
+{
+    if (this.directionInLoop) {
+        var ratio = this.velocity / BaseAvatar.prototype.velocity;
+
+        this.angularVelocityBase = ratio * BaseAvatar.prototype.angularVelocityBase + Math.log(1/ratio)/1000;
+        this.setAngularVelocity();
+    }
 };
 
 /**
@@ -162,9 +185,7 @@ BaseAvatar.prototype.updateVelocities = function()
  */
 BaseAvatar.prototype.setRadius = function(radius)
 {
-    if (radius > 0) {
-        this.radius = radius;
-    }
+    this.radius = Math.max(radius, BaseAvatar.prototype.radius/8);
 };
 
 /**
@@ -175,20 +196,27 @@ BaseAvatar.prototype.setRadius = function(radius)
 BaseAvatar.prototype.setInverse = function(inverse)
 {
     this.inverse = inverse ? true : false;
-
-    if (this.angularVelocity !== 0) {
-        this.setAngularVelocity(this.angularVelocity > 0 ? 1 : -1);
-    }
+    this.setAngularVelocity();
 };
 
 /**
  * Set invincible
  *
- * @param {Number} inverse
+ * @param {Number} invincible
  */
 BaseAvatar.prototype.setInvincible = function(invincible)
 {
     this.invincible = invincible ? true : false;
+};
+
+/**
+ * Set borderless
+ *
+ * @param {Number} borderless
+ */
+BaseAvatar.prototype.setBorderless = function(borderless)
+{
+    this.borderless = borderless ? true : false;
 };
 
 /**
@@ -209,51 +237,9 @@ BaseAvatar.prototype.getDistance = function(from, to)
  */
 BaseAvatar.prototype.die = function()
 {
-    if (!this.invincible) {
-        this.alive = false;
-    }
-};
+    this.alive = false;
 
-/**
- * Start printing
- */
-BaseAvatar.prototype.togglePrinting = function()
-{
-    if (this.printingTimeout) {
-        clearTimeout(this.printingTimeout);
-        this.printingTimeout = null;
-    }
-
-    this.setPrinting(!this.printing);
-
-    this.printingTimeout = setTimeout(this.togglePrinting, this.getRandomPrintingTime());
-};
-
-/**
- * Stop printing
- */
-BaseAvatar.prototype.stopPrinting = function()
-{
-    if (this.printingTimeout) {
-        clearTimeout(this.printingTimeout);
-        this.printingTimeout = null;
-    }
-
-    this.setPrinting(false);
-};
-
-/**
- * Set printing with timeout start/stop
- *
- * @param {Boolean} printing
- */
-BaseAvatar.prototype.setPrintingWithTimeout = function(printing)
-{
-    if (!printing) {
-        this.stopPrinting();
-    } else if (!this.printingTimeout) {
-        this.togglePrinting();
-    }
+    this.bonusStack.clear();
 };
 
 /**
@@ -263,32 +249,16 @@ BaseAvatar.prototype.setPrintingWithTimeout = function(printing)
  */
 BaseAvatar.prototype.setPrinting = function(printing)
 {
-    if (!printing) {
+    printing = printing ? true : false;
+
+    if (this.printing !== printing) {
+        this.printing = printing;
+
         this.addPoint(this.head.slice(0), true);
-    }
 
-    this.printing = printing;
-
-    if (!this.printing) {
-        this.trail.clear();
-    }
-
-    if (printing) {
-        this.addPoint(this.head.slice(0), true);
-    }
-};
-
-/**
- * Get random printing time
- *
- * @return {Number}
- */
-BaseAvatar.prototype.getRandomPrintingTime = function()
-{
-    if (this.printing) {
-        return this.printingTime * (0.2 + Math.random() * 0.8);
-    } else {
-        return this.noPrintingTime * (0.8 + Math.random() * 0.5);
+        if (!this.printing) {
+            this.trail.clear();
+        }
     }
 };
 
@@ -299,7 +269,28 @@ BaseAvatar.prototype.getRandomPrintingTime = function()
  */
 BaseAvatar.prototype.addScore = function(score)
 {
-    this.setScore(this.score + score);
+    this.setRoundScore(this.roundScore + score);
+};
+
+/**
+ * Resolve score
+ *
+ * @param {Number} score
+ */
+BaseAvatar.prototype.resolveScore = function()
+{
+    this.setScore(this.score + this.roundScore);
+    this.roundScore = 0;
+};
+
+/**
+ * This round score
+ *
+ * @param {Number} score
+ */
+BaseAvatar.prototype.setRoundScore = function(score)
+{
+    this.roundScore = score;
 };
 
 /**
@@ -327,20 +318,27 @@ BaseAvatar.prototype.setColor = function(color)
  */
 BaseAvatar.prototype.clear = function()
 {
-    this.stopPrinting();
     this.bonusStack.clear();
 
-    this.head            = [this.radius, this.radius];
-    this.angle           = Math.random() * Math.PI;
-    this.velocities      = [0,0];
-    this.angularVelocity = 0;
-    this.velocity        = BaseAvatar.prototype.velocity;
-    this.alive           = true;
-    this.printing        = false;
-    this.color           = this.ownColor;
-    this.radius          = BaseAvatar.prototype.radius;
-    this.inverse         = BaseAvatar.prototype.inverse;
-    this.invincible      = BaseAvatar.prototype.invincible;
+    this.head                = [this.radius, this.radius];
+    this.angle               = Math.random() * Math.PI;
+    this.velocities          = [0,0];
+    this.angularVelocity     = 0;
+    this.roundScore          = 0;
+    this.velocity            = BaseAvatar.prototype.velocity;
+    this.alive               = true;
+    this.printing            = false;
+    this.color               = this.player.color;
+    this.radius              = BaseAvatar.prototype.radius;
+    this.inverse             = BaseAvatar.prototype.inverse;
+    this.invincible          = BaseAvatar.prototype.invincible;
+    this.borderless          = BaseAvatar.prototype.borderless;
+    this.directionInLoop     = BaseAvatar.prototype.directionInLoop;
+    this.angularVelocityBase = BaseAvatar.prototype.angularVelocityBase;
+
+    if (this.body) {
+        this.body.radius = BaseAvatar.prototype.radius;
+    }
 
     this.updateVelocities();
 };
@@ -350,7 +348,9 @@ BaseAvatar.prototype.clear = function()
  */
 BaseAvatar.prototype.destroy = function()
 {
-    this.stopPrinting();
+    this.clear();
+    this.present = false;
+    this.alive   = false;
 };
 
 /**
@@ -361,6 +361,7 @@ BaseAvatar.prototype.destroy = function()
 BaseAvatar.prototype.serialize = function()
 {
     return {
+        id: this.id,
         name: this.name,
         color: this.color,
         score: this.score
