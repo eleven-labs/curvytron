@@ -7,9 +7,10 @@ function Avatar(player)
 {
     BaseAvatar.call(this, player);
 
-    this.game      = null;
-    this.bodyCount = 0;
-    this.body      = new AvatarBody(this.head, this);
+    this.game         = null;
+    this.bodyCount    = 0;
+    this.body         = new AvatarBody(this.head, this);
+    this.printManager = new PrintManager(this);
 }
 
 Avatar.prototype = Object.create(BaseAvatar.prototype);
@@ -97,6 +98,17 @@ Avatar.prototype.setInvincible = function(invincible)
 };
 
 /**
+ * Set borderless
+ *
+ * @param {Number} borderless
+ */
+Avatar.prototype.setBorderless = function(borderless)
+{
+    BaseAvatar.prototype.setBorderless.call(this, borderless);
+    this.emit('property', {avatar: this, property: 'borderless', value: this.borderless});
+};
+
+/**
  * Set inverse
  *
  * @param {Number} inverse
@@ -125,7 +137,7 @@ Avatar.prototype.setColor = function(color)
  */
 Avatar.prototype.addPoint = function(point, important)
 {
-    if (this.game.isPlaying()) {
+    if (this.game.frame) {
         BaseAvatar.prototype.addPoint.call(this, point);
         this.emit('point', { avatar: this, point: point, important: important || this.angularVelocity });
     }
@@ -148,11 +160,10 @@ Avatar.prototype.setPrinting = function(printing)
 Avatar.prototype.die = function()
 {
     BaseAvatar.prototype.die.call(this);
-    
-    if (!this.invincible) {
-        this.addPoint(this.head.slice(0));
-        this.emit('die', {avatar: this});
-    }
+
+    this.printManager.stop();
+    this.addPoint(this.head.slice(0));
+    this.emit('die', {avatar: this});
 };
 
 /**
@@ -167,10 +178,22 @@ Avatar.prototype.setScore = function(score)
 };
 
 /**
+ * Set round score
+ *
+ * @param {Number} score
+ */
+Avatar.prototype.setRoundScore = function(score)
+{
+    BaseAvatar.prototype.setRoundScore.call(this, score);
+    this.emit('property', {avatar: this, property: 'roundScore', value: this.roundScore});
+};
+
+/**
  * Clear
  */
 Avatar.prototype.clear = function()
 {
     BaseAvatar.prototype.clear.call(this);
+    this.printManager.stop();
     this.bodyCount = 0;
 };

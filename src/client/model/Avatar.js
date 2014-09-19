@@ -7,29 +7,24 @@ function Avatar(player)
 {
     BaseAvatar.call(this, player);
 
-    this.local  = player.local;
-    this.canvas = new Canvas(100, 100);
-    this.arrow  = new Canvas(100, 100);
-    this.start  = new Array(2);
-    this.radius = this.radius * this.radiusMargin;
-    this.width  = this.radius * 2;
+    this.local     = player.local;
+    this.canvas    = new Canvas(100, 100);
+    this.arrow     = new Canvas(100, 100);
+    this.start     = new Array(2);
+    this.width     = this.radius * 2;
+    this.animation = null;
 
     if (this.local) {
         this.input = new PlayerInput(this, player.getBinding());
     }
+
+    this.clearAnimation = this.clearAnimation.bind(this);
 
     this.drawArrow();
 }
 
 Avatar.prototype = Object.create(BaseAvatar.prototype);
 Avatar.prototype.constructor = Avatar;
-
-/**
- * Radius margin
- *
- * @type {Number}
- */
-Avatar.prototype.radiusMargin = 1;
 
 /**
  * Arrao width
@@ -75,10 +70,8 @@ Avatar.prototype.setScale = function(scale)
  */
 Avatar.prototype.setRadius = function(radius)
 {
-    this.radius = radius * this.radiusMargin;
-    this.width  = this.radius * 2;
-
-    this.setScale(this.canvas.scale);
+    BaseAvatar.prototype.setRadius.call(this, radius);
+    this.updateWidth();
 };
 
 /**
@@ -93,12 +86,29 @@ Avatar.prototype.setColor = function(color)
 };
 
 /**
+ * Set score
+ *
+ * @param {Number} score
+ */
+Avatar.prototype.setScore = function(score)
+{
+    var diff = score - this.score;
+
+    BaseAvatar.prototype.setScore.call(this, score);
+
+    this.roundScore = diff;
+};
+
+/**
  * Die
  */
 Avatar.prototype.die = function()
 {
     BaseAvatar.prototype.die.call(this);
     this.addPoint(this.head);
+
+    setTimeout(this.clearAnimation, Explode.prototype.duration);
+    this.animation = new Explode(this);
 };
 
 /**
@@ -134,12 +144,12 @@ Avatar.prototype.updateStart = function()
 };
 
 /**
- * Clear
+ * Update width
  */
-Avatar.prototype.clear = function()
+Avatar.prototype.updateWidth = function()
 {
-    BaseAvatar.prototype.clear.call(this);
-    this.setRadius(Avatar.prototype.radius);
+    this.width = this.radius * 2;
+    this.setScale(this.canvas.scale);
 };
 
 /**
@@ -160,6 +170,24 @@ Avatar.prototype.destroy = function()
 };
 
 /**
+ * Clear
+ */
+Avatar.prototype.clear = function()
+{
+    BaseAvatar.prototype.clear.call(this);
+    this.updateWidth();
+    this.clearAnimation();
+};
+
+/**
+ * Clear animation
+ */
+Avatar.prototype.clearAnimation = function ()
+{
+    this.animation = null;
+}
+
+/**
  * Set
  *
  * @param {String} property
@@ -172,7 +200,7 @@ Avatar.prototype.set = function(property, value)
     if (typeof(this[method]) !== 'undefined') {
         this[method](value);
     } else {
-        throw "Unknown setter " + method;
+        throw 'Unknown setter ' + method;
     }
 };
 
